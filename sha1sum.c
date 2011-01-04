@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
         char line[BUFSIZE];
         char *check_path;
         char *check_hash;
-        FILE *fp, *fpp;
+        FILE *fp, *fp_check;
         int r;
         int flag;
 
@@ -43,26 +43,26 @@ int main(int argc, char *argv[]) {
                         check_path = strtok(NULL, " ");
 
                         /* Open each file specified in the checksum file */
-                        fpp = fopen(check_path, "r");
-                        if (fpp == NULL) {
+                        fp_check = fopen(check_path, "r");
+                        if (fp_check == NULL) {
                                 fprintf(stderr, "sha1sum: error opening file %s\n", check_path);
                                 fclose(fp);
                                 return -1;
                         }
-                        if (!hash_file(fpp, hash)) {
-                                fclose(fpp);
+                        if (hash_file(fp_check, hash) < 0) {
+                                fclose(fp_check);
                                 fclose(fp);
                                 fprintf(stderr, "sha1sum: error hashing file\n");
                                 return -1;
                         }
                         /* Compare previous hash with current hash */
                         if (strcmp(check_hash, hash) != 0) {
-                                printf("sha1sum: file %s corrupted\n", check_path);
-                                printf("original >  %s\n", check_hash);
-                                printf("new      <  %s\n", hash);
+                                fprintf(stderr, "sha1sum: file %s corrupted\n", check_path);
+                                fprintf(stderr, "original >  %s\n", check_hash);
+                                fprintf(stderr, "new      <  %s\n", hash);
                         }
                         /* Close original final */
-                        fclose(fpp);
+                        fclose(fp_check);
                 }
                 /* Close checksum file */
                 fclose(fp);
@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
                                 fprintf(stderr, "sha1sum: error opening file %s\n", argv[r]);
                                 return -1;
                         }
-                        if (!hash_file(fp, hash)) {
+                        if (hash_file(fp, hash) < 0) {
                                 fclose(fp);
                                 fprintf(stderr, "sha1sum: error hashing file\n");
                                 return -1;
@@ -101,12 +101,12 @@ int hash_file(FILE *fp, char *hash) {
         ctx = malloc(sizeof(SHA_CTX));
         if (ctx == NULL) {
                 fprintf(stderr, "sha1sum: malloc() failed\n");
-                return 0;
+                return -1;
         }
         if (!SHA1_Init(ctx)) {
                 fprintf(stderr, "sha1sum: could not initialize SHA_CTX struct\n");
                 free(ctx);
-                return 0;
+                return -1;
         }
 
         /* Pass BUFSIZE bytes at a time to struct */
@@ -115,13 +115,13 @@ int hash_file(FILE *fp, char *hash) {
                 if (!SHA1_Update(ctx, buf, count)) {
                         fprintf(stderr, "sha1sum: could not update struct SHA_CTX\n");
                         free(ctx);
-                        return 0;
+                        return -1;
                 }
         }
         if (!SHA1_Final(raw_hash, ctx)) {
                 fprintf(stderr, "sha1sum: could not finalize struct SHA_CTX\n");
                 free(ctx);
-                return 0;
+                return -1;
         }
         free(ctx);
 
@@ -133,5 +133,5 @@ int hash_file(FILE *fp, char *hash) {
         }
         hash[j] = '\0';
 
-        return 1;
+        return 0;
 }
