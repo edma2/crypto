@@ -11,13 +11,13 @@
 int hash_file(FILE *fp, char *hash);
 
 int main(int argc, char *argv[]) {
-        char hash[50];
+        char hash[BUFSIZE];
         char line[BUFSIZE];
         char *check_path;
         char *check_hash;
         FILE *fp, *fp_check;
         int r;
-        int flag;
+        int flag = 0;
 
         /* Take care of the arguments */
         if (argc > 1) {
@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
         return 0;
 }
 
-/* Store hash bytes in hash, return 0 on error, 1 otherwise */
+/* Store hash bytes in hash, return -1 on error, 0 otherwise */
 int hash_file(FILE *fp, char *hash) {
         SHA_CTX *ctx;
         uint8_t buf[BUFSIZE];
@@ -127,6 +127,7 @@ int hash_file(FILE *fp, char *hash) {
 
         /* Write to string */
         for (i = 0, j = 0; i < HASHSIZE; i++) {
+                /* Format into hexadecimals */
                 snprintf(byte, 3, "%02x", raw_hash[i]);
                 hash[j++] = byte[0];
                 hash[j++] = byte[1];
