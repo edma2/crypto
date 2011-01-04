@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
         int flag;
 
         /* Take care of the arguments */
-        if (argc > 2) {
+        if (argc > 1) {
                 /* Check for flag */
                 if (argc == 3)
                         flag = !strcmp(argv[1], "-c");
