@@ -8,20 +8,27 @@
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
+#include <time.h>
 
 #define PW_SIZE         30
 #define IV_SIZE         8
 #define BF_BLOCK_SIZE   8
 #define HEADER_SIZE     16
 
+typedef union {
+        uint64_t iv64;
+        uint8_t iv8[sizeof(uint64_t)];
+} IVec;
+
 int main(int argc, char *argv[]) {
         uint8_t pw[PW_SIZE];
-        uint8_t iv[IV_SIZE] = { 0 };
         uint8_t header[HEADER_SIZE];
         uint8_t buf_in[BF_BLOCK_SIZE];
         uint8_t buf_out[BF_BLOCK_SIZE];
         uint64_t filelen;
         FILE *fp;
+        time_t tm;
+        IVec iv;
         BF_KEY key;
         int mode, count;
         int i;
@@ -42,10 +49,9 @@ int main(int argc, char *argv[]) {
                 }
                 fp = fopen(argv[2], "r");
         } else {
-                fprintf(stderr, "usage: bf [flag] <file>\n");
+                fprintf(stderr, "usage: blowfish [flag] <file>\n");
                 return -1;
         }
-
         if (fp == NULL) {
                 fprintf(stderr, "error: unable to open file for reading\n");
                 return -1;
@@ -66,17 +72,19 @@ int main(int argc, char *argv[]) {
         /* Initialize the key */
         BF_set_key(&key, strlen((char *)pw), pw);
 
+        /* seed random number generator with unix time
+         * and pass random number to iv */
+        tm = time(NULL);
+        srandom(tm);
+        iv.iv64 = random();
+
         /*
          * Prepare 16 byte header consisting of the initialization
-         * vector and information about the length of the file 
+         * vector and the length of the file 
          */
         if (mode == BF_ENCRYPT) {
-                /*
-                 * Get initialization vector
-                 * TODO: use entropy bits
-                 */
                 for (i = 0; i < IV_SIZE; i++)
-                        header[i] = iv[i];
+                        header[i] = iv.iv8[i];
 
                 /* Get length of file */
                 if (fseek(fp, 0, SEEK_END) < 0) {
@@ -101,7 +109,7 @@ int main(int argc, char *argv[]) {
                 }
         } else if (mode == BF_DECRYPT) {
                 /* Retrieve initilization vector */
-                if (fread(iv, sizeof(uint8_t), IV_SIZE, fp) < 0) {
+                if (fread(iv.iv8, sizeof(uint8_t), IV_SIZE, fp) < 0) {
                         fprintf(stderr, "error: unable to read file\n");
                         fclose(fp);
                         return -1;
@@ -132,7 +140,7 @@ int main(int argc, char *argv[]) {
                                 filelen -= count;
                 }
                 /* CBC mode - initialization vector set to 0 */
-                BF_cbc_encrypt(buf_in, buf_out, BF_BLOCK_SIZE, &key, iv, mode);
+                BF_cbc_encrypt(buf_in, buf_out, BF_BLOCK_SIZE, &key, iv.iv8, mode);
                 if (fwrite(buf_out, sizeof(uint8_t), count, stdout) != count) {
                         fprintf(stderr, "error: write error\n");
                         break;
