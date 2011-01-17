@@ -13,7 +13,7 @@
 #define PW_SIZE         30
 #define IV_SIZE         8
 #define BF_BLOCK_SIZE   8
-#define HEADER_SIZE     16
+#define HEADER_SIZE     9
 
 typedef union {
         uint64_t iv64;
@@ -24,17 +24,18 @@ int main(int argc, char *argv[]) {
         uint8_t pw[PW_SIZE];
         uint8_t header[HEADER_SIZE];
         uint8_t buf_in[BF_BLOCK_SIZE];
+        uint8_t keystream[BF_BLOCK_SIZE];
         uint8_t buf_out[BF_BLOCK_SIZE];
         uint64_t filelen;
+        uint8_t padlen;
+        int mode, count, i;
         FILE *fp;
         time_t tm;
         IVec iv;
         BF_KEY key;
-        int mode, count;
-        int i;
         struct termios term, term_orig;
 
-        /* Take care of the arguments and set encryption mode */
+        /* take care of the arguments and set encryption mode */
         if (argc == 2) {
                 mode = BF_ENCRYPT;
                 fp = fopen(argv[1], "r");
@@ -57,96 +58,105 @@ int main(int argc, char *argv[]) {
                 return -1;
         }
 
-        /* Disable terminal echo */
+        /* disable terminal echo */
         tcgetattr(STDIN_FILENO, &term);
         term_orig = term;
         term.c_lflag &= ~ECHO;
         tcsetattr(STDIN_FILENO, TCSANOW, &term);
-        /* Get password */
+        /* get password */
         fprintf(stderr, "Enter password: ");
         fgets((char *)pw, PW_SIZE, stdin);
         fprintf(stderr, "\n");
-        /* Restore terminal echo */
+        /* restore terminal echo */
         tcsetattr(STDIN_FILENO, TCSANOW, &term_orig);
 
-        /* Initialize the key */
+        /* initialize the key */
         BF_set_key(&key, strlen((char *)pw), pw);
 
-        /* seed random number generator with unix time
-         * and pass random number to iv */
-        tm = time(NULL);
-        srandom(tm);
-        iv.iv64 = random();
-
         /*
-         * Prepare 16 byte header consisting of the initialization
-         * vector and the length of the file 
+         * Prepare 9 byte header consisting of the initialization
+         * vector and the pad length of the file 
          */
         if (mode == BF_ENCRYPT) {
+                /* seed random number generator with unix time
+                 * and pass random number to iv */
+                tm = time(NULL);
+                srandom(tm);
+                iv.iv64 = random();
                 for (i = 0; i < IV_SIZE; i++)
                         header[i] = iv.iv8[i];
-
-                /* Get length of file */
+                /* get length of file */
                 if (fseek(fp, 0, SEEK_END) < 0) {
                         fprintf(stderr, "error: unable to obtain file length\n");
                         fclose(fp);
                         return -1;
                 }
                 filelen = ftell(fp);
+                padlen = BF_BLOCK_SIZE - filelen % 8;
                 if (filelen < 0) {
                         fprintf(stderr, "error: unable to obtain file length\n");
                         fclose(fp);
                         return -1;
                 }
-                *(uint64_t *)(header + IV_SIZE) = filelen;
+                header[i] = padlen;
                 rewind(fp);
-
-                /* Write 16-byte header - IV and filelen */
+                /* write 16-byte header - IV and filelen */
                 if (fwrite(header, sizeof(uint8_t), HEADER_SIZE, stdout) != HEADER_SIZE) {
                         fprintf(stderr, "error: unable to write header\n");
                         fclose(fp);
                         return -1;
                 }
+                /* read from file and write to stdout */
+                while ((count = fread(buf_in, sizeof(uint8_t), BF_BLOCK_SIZE, fp)) > 0) {
+                        /* add necessary padding */
+                        for (; count < BF_BLOCK_SIZE; count++)
+                                buf_in[count] = 0;
+                        /* 
+                         * --CTR MODE--
+                         * Use initialization vector and counter to generate 
+                         * keystream. XOR keystream with plaintext to produce 
+                         * the final encrypted block.
+                         */
+
+                        BF_ecb_encrypt(iv.iv8, keystream, &key, BF_ENCRYPT);
+                        iv.iv64++;
+                        for (i = 0; i < BF_BLOCK_SIZE; i++)
+                                buf_out[i] = keystream[i] ^ buf_in[i];
+                        if (fwrite(buf_out, sizeof(uint8_t), BF_BLOCK_SIZE, stdout) != count) {
+                                fprintf(stderr, "error: write error\n");
+                                break;
+                        }
+                }
         } else if (mode == BF_DECRYPT) {
-                /* Retrieve initilization vector */
+                /* retrieve initilization vector */
                 if (fread(iv.iv8, sizeof(uint8_t), IV_SIZE, fp) < 0) {
                         fprintf(stderr, "error: unable to read file\n");
                         fclose(fp);
                         return -1;
                 }
-
-                /* Retreive length of file */
-                if (fread(&filelen, sizeof(uint64_t), 1, fp) != 1) {
+                /* retreive padding length */
+                if (fread(&padlen, sizeof(uint8_t), 1, fp) != 1) {
                         fprintf(stderr, "error: unable to read file\n");
                         fclose(fp);
                         return -1;
                 }
-        }
-
-        /* Read from file and write to stdout */
-        while ((count = fread(buf_in, sizeof(uint8_t), BF_BLOCK_SIZE, fp)) > 0) {
-                //fprintf(stderr, "%d\n", count);
-                if (mode == BF_ENCRYPT) {
-                        /* Add necessary padding */
-                        for (; count < BF_BLOCK_SIZE; count++)
-                                buf_in[count] = 0;
-                } else if (mode == BF_DECRYPT) {
-                        /* Keep track of file length
-                         * Check for file offset when we reach the last
-                         * block. */
-                        if (count > filelen)
-                                count = filelen;
-                        else
-                                filelen -= count;
+                fprintf(stderr, "%d\n", padlen);
+                /* set count equal to 0 so that we don't write anything in the first loop */
+                count = 0;
+                /* read from file and write to stdout */
+                while (fread(buf_in, sizeof(uint8_t), BF_BLOCK_SIZE, fp) > 0) {
+                        if (fwrite(buf_out, sizeof(uint8_t), count, stdout) != count) {
+                                fprintf(stderr, "error: write error\n");
+                                break;
+                        }
+                        BF_ecb_encrypt(iv.iv8, keystream, &key, BF_ENCRYPT);
+                        iv.iv64++;
+                        for (i = 0; i < BF_BLOCK_SIZE; i++)
+                                buf_out[i] = keystream[i] ^ buf_in[i];
+                        count = BF_BLOCK_SIZE;
                 }
-                /* CBC mode - initialization vector set to 0 */
-                BF_cbc_encrypt(buf_in, buf_out, BF_BLOCK_SIZE, &key, iv.iv8, mode);
-                if (fwrite(buf_out, sizeof(uint8_t), count, stdout) != count) {
-                        fprintf(stderr, "error: write error\n");
-                        break;
-                }
+                fwrite(buf_out, sizeof(uint8_t), BF_BLOCK_SIZE - padlen, stdout);
         }
         fclose(fp);
-
         return 0;
 }
