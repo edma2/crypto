@@ -1,4 +1,4 @@
-/* blowfish.c - password protected file encryption 
+/* cryptobf.c - password protected file encryption 
  * author: Eugene Ma (edma2)
  */
 #include <openssl/blowfish.h>
@@ -28,7 +28,9 @@ int main(int argc, char *argv[]) {
         uint8_t buf_out[BF_BLOCK_SIZE];
         uint64_t filelen;
         uint8_t padlen;
-        int mode, count, i;
+        int mode;
+        int read_count, write_count;
+        int i;
         FILE *fp;
         time_t tm;
         IVec iv;
@@ -100,32 +102,11 @@ int main(int argc, char *argv[]) {
                 }
                 header[i] = padlen;
                 rewind(fp);
-                /* write 16-byte header - IV and filelen */
+                /* write 9 byte header - IV and filelen */
                 if (fwrite(header, sizeof(uint8_t), HEADER_SIZE, stdout) != HEADER_SIZE) {
                         fprintf(stderr, "error: unable to write header\n");
                         fclose(fp);
                         return -1;
-                }
-                /* read from file and write to stdout */
-                while ((count = fread(buf_in, sizeof(uint8_t), BF_BLOCK_SIZE, fp)) > 0) {
-                        /* add necessary padding */
-                        for (; count < BF_BLOCK_SIZE; count++)
-                                buf_in[count] = 0;
-                        /* 
-                         * --CTR MODE--
-                         * Use initialization vector and counter to generate 
-                         * keystream. XOR keystream with plaintext to produce 
-                         * the final encrypted block.
-                         */
-
-                        BF_ecb_encrypt(iv.iv8, keystream, &key, BF_ENCRYPT);
-                        iv.iv64++;
-                        for (i = 0; i < BF_BLOCK_SIZE; i++)
-                                buf_out[i] = keystream[i] ^ buf_in[i];
-                        if (fwrite(buf_out, sizeof(uint8_t), BF_BLOCK_SIZE, stdout) != count) {
-                                fprintf(stderr, "error: write error\n");
-                                break;
-                        }
                 }
         } else if (mode == BF_DECRYPT) {
                 /* retrieve initilization vector */
@@ -140,23 +121,31 @@ int main(int argc, char *argv[]) {
                         fclose(fp);
                         return -1;
                 }
-                fprintf(stderr, "%d\n", padlen);
-                /* set count equal to 0 so that we don't write anything in the first loop */
-                count = 0;
-                /* read from file and write to stdout */
-                while (fread(buf_in, sizeof(uint8_t), BF_BLOCK_SIZE, fp) > 0) {
-                        if (fwrite(buf_out, sizeof(uint8_t), count, stdout) != count) {
-                                fprintf(stderr, "error: write error\n");
-                                break;
-                        }
-                        BF_ecb_encrypt(iv.iv8, keystream, &key, BF_ENCRYPT);
-                        iv.iv64++;
-                        for (i = 0; i < BF_BLOCK_SIZE; i++)
-                                buf_out[i] = keystream[i] ^ buf_in[i];
-                        count = BF_BLOCK_SIZE;
-                }
-                fwrite(buf_out, sizeof(uint8_t), BF_BLOCK_SIZE - padlen, stdout);
         }
+        write_count = 0;
+        /* read from file and write to stdout */
+        while ((read_count = fread(buf_in, sizeof(uint8_t), BF_BLOCK_SIZE, fp)) > 0) {
+                if (mode == BF_ENCRYPT) {
+                        /* add necessary padding */
+                        for (; read_count < BF_BLOCK_SIZE; read_count++)
+                                buf_in[read_count] = 0;
+                }
+                if (fwrite(buf_out, sizeof(uint8_t), write_count, stdout) != write_count) {
+                        fprintf(stderr, "error: write error\n");
+                        break;
+                }
+                BF_ecb_encrypt(iv.iv8, keystream, &key, BF_ENCRYPT);
+                iv.iv64++;
+                for (i = 0; i < BF_BLOCK_SIZE; i++)
+                        buf_out[i] = keystream[i] ^ buf_in[i];
+                write_count = BF_BLOCK_SIZE;
+        }
+        /* write the last byte, taking the file offset into
+         * account if program is in decrypt mode */
+        write_count = ((mode == BF_ENCRYPT) ? BF_BLOCK_SIZE : BF_BLOCK_SIZE - padlen);
+        if (fwrite(buf_out, sizeof(uint8_t), write_count, stdout) != write_count)
+                fprintf(stderr, "error: write error\n");
+
         fclose(fp);
         return 0;
 }

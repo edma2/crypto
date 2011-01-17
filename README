@@ -1,2 +1,3 @@
-sha1sum.c - calculate the SHA1 sum of a file, prints to stdout, optional checking function
+Simple crypto toolset
 author: Eugene Ma (edma2)
+fool
