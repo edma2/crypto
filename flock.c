@@ -1,4 +1,4 @@
-/* cryptobf.c - password protected file encryption 
+/* flock.c - file encryption using OpenSSL's implementation of the blowfish algorithm
  * author: Eugene Ma (edma2)
  */
 #include <openssl/blowfish.h>

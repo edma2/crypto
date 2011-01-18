@@ -1,4 +1,6 @@
-/* sha1.c - calculate the SHA1 sum of a file, prints to stdout */
+/* sha1sum.c - calculate the SHA1 checksum of a file, prints to stdout
+ * author: Eugene Ma (edma2)
+ */
 #include <openssl/sha.h>
 #include <stdio.h>
 #include <stdint.h>
