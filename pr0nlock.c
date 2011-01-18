@@ -1,4 +1,4 @@
-/* flock.c - file encryption using OpenSSL's implementation of the blowfish algorithm
+/* filelock.c - file encryption using OpenSSL's implementation of blowfish 
  * author: Eugene Ma (edma2)
  */
 #include <openssl/blowfish.h>
