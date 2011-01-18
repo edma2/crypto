@@ -1,4 +1,4 @@
-/* filelock.c - file encryption using OpenSSL's implementation of blowfish 
+/* pr0nlock.c - file encryption using OpenSSL's implementation of blowfish 
  * author: Eugene Ma (edma2)
  */
 #include <openssl/blowfish.h>
@@ -27,9 +27,9 @@ int main(int argc, char *argv[]) {
         uint8_t keystream[BF_BLOCK_SIZE];
         uint8_t buf_out[BF_BLOCK_SIZE];
         uint64_t filelen;
-        uint8_t padlen;
+        uint8_t last_block_size;
         int mode;
-        int read_count, write_count;
+        int read_count, write_count = 0;
         int i;
         FILE *fp;
         time_t tm;
@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
                 }
                 fp = fopen(argv[2], "r");
         } else {
-                fprintf(stderr, "usage: blowfish [flag] <file>\n");
+                fprintf(stderr, "usage: pr0nlock [flag] <file>\n");
                 return -1;
         }
         if (fp == NULL) {
@@ -94,13 +94,15 @@ int main(int argc, char *argv[]) {
                         return -1;
                 }
                 filelen = ftell(fp);
-                padlen = BF_BLOCK_SIZE - filelen % 8;
                 if (filelen < 0) {
                         fprintf(stderr, "error: unable to obtain file length\n");
                         fclose(fp);
                         return -1;
                 }
-                header[i] = padlen;
+                last_block_size = filelen % BF_BLOCK_SIZE;
+                if (last_block_size == 0)
+                        last_block_size = BF_BLOCK_SIZE;
+                header[i] = last_block_size;
                 rewind(fp);
                 /* write 9 byte header - IV and filelen */
                 if (fwrite(header, sizeof(uint8_t), HEADER_SIZE, stdout) != HEADER_SIZE) {
@@ -115,14 +117,13 @@ int main(int argc, char *argv[]) {
                         fclose(fp);
                         return -1;
                 }
-                /* retreive padding length */
-                if (fread(&padlen, sizeof(uint8_t), 1, fp) != 1) {
+                /* retreive offset information */
+                if (fread(&last_block_size, sizeof(uint8_t), 1, fp) != 1) {
                         fprintf(stderr, "error: unable to read file\n");
                         fclose(fp);
                         return -1;
                 }
         }
-        write_count = 0;
         /* read from file and write to stdout */
         while ((read_count = fread(buf_in, sizeof(uint8_t), BF_BLOCK_SIZE, fp)) > 0) {
                 if (mode == BF_ENCRYPT) {
@@ -140,9 +141,9 @@ int main(int argc, char *argv[]) {
                         buf_out[i] = keystream[i] ^ buf_in[i];
                 write_count = BF_BLOCK_SIZE;
         }
-        /* write the last byte, taking the file offset into
+        /* write the last block, taking the file offset into
          * account if program is in decrypt mode */
-        write_count = ((mode == BF_ENCRYPT) ? BF_BLOCK_SIZE : BF_BLOCK_SIZE - padlen);
+        write_count = ((mode == BF_ENCRYPT) ? BF_BLOCK_SIZE : last_block_size);
         if (fwrite(buf_out, sizeof(uint8_t), write_count, stdout) != write_count)
                 fprintf(stderr, "error: write error\n");
 
