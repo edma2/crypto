@@ -84,8 +84,7 @@ int main(int argc, char *argv[]) {
                  * and pass random number to iv */
                 tm = time(NULL);
                 srandom(tm);
-                iv.iv64 = random();
-                iv.iv64 = (iv.iv64 << 32) | random();
+                iv.iv64 = ((uint64_t)random() << 32) | random();
                 for (i = 0; i < IV_SIZE; i++)
                         header[i] = iv.iv8[i];
                 /* get length of file */
