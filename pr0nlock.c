@@ -42,11 +42,11 @@ int main(int argc, char *argv[]) {
                 mode = BF_ENCRYPT;
                 fp = fopen(argv[1], "r");
         } else if (argc == 3) {
-                if (strcmp(argv[1], "-e") == 0)
+                if (strcmp(argv[1], "-e") == 0) {
                         mode = BF_ENCRYPT;
-                else if (strcmp(argv[1], "-d") == 0)
+                } else if (strcmp(argv[1], "-d") == 0) {
                         mode = BF_DECRYPT;
-                else {
+                } else {
                         fprintf(stderr, "error: use flags -e for encryption and -d for decryption\n");
                         return -1;
                 }
@@ -85,6 +85,7 @@ int main(int argc, char *argv[]) {
                 tm = time(NULL);
                 srandom(tm);
                 iv.iv64 = random();
+                iv.iv64 = (iv.iv64 << 32) | random();
                 for (i = 0; i < IV_SIZE; i++)
                         header[i] = iv.iv8[i];
                 /* get length of file */
