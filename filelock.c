@@ -80,10 +80,13 @@ int main(int argc, char *argv[]) {
          * vector and the pad length of the file 
          */
         if (mode == BF_ENCRYPT) {
-                /* seed random number generator with unix time
-                 * and pass random number to iv */
+                /* 
+                 * Seed random number generator with unix time
+                 * and pass random number to IV 
+                 */
                 tm = time(NULL);
                 srandom(tm);
+                /* Use all 64 bits */
                 iv.iv64 = ((uint64_t)random() << 32) | random();
                 for (i = 0; i < IV_SIZE; i++)
                         header[i] = iv.iv8[i];
