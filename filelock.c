@@ -1,4 +1,4 @@
-/* pr0nlock.c - file encryption using OpenSSL's implementation of blowfish 
+/* filelock.c - file encryption using OpenSSL's implementation of blowfish 
  * author: Eugene Ma (edma2)
  */
 #include <openssl/blowfish.h>
@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
                 }
                 fp = fopen(argv[2], "r");
         } else {
-                fprintf(stderr, "usage: pr0nlock [flag] <file>\n");
+                fprintf(stderr, "usage: filelock [flag] <file>\n");
                 return -1;
         }
         if (fp == NULL) {
