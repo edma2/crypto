@@ -22,19 +22,23 @@ typedef union {
 } IVec;
 
 int main(int argc, char *argv[]) {
-        char c;
+        FILE *fin, *fout;
+
         uint8_t pw[PW_SIZE];
         uint8_t buf_in[BF_BLOCK_SIZE], buf_out[BF_BLOCK_SIZE];
         uint8_t keystream[BF_BLOCK_SIZE];
         uint8_t last_block_size;
-        int mode;
         int read_count, write_count;
-        int i;
-        FILE *fin, *fout;
         time_t tm;
         IVec iv;
-        BF_KEY key;
+
         struct termios term, term_orig;
+        FILE *kb;
+        int kbfd;
+        BF_KEY key;
+
+        uint8_t c;
+        int mode, i;
 
         /* Check correct argument count */
         if (argc != 4) {
@@ -77,19 +81,44 @@ int main(int argc, char *argv[]) {
                 }
         }
 
+        /* Open input stream from keyboard */
+        kb = fopen("/dev/tty", "r");
+        if (kb == NULL) { 
+                fprintf(stderr, "Error: unable to open tty\n");
+                if (fin != stdin)
+                        fclose(fin);
+                if (fout != stdout) {
+                        fclose(fout);
+                        remove(argv[3]);
+                }
+                return -1;
+        }
+        kbfd = fileno(kb);
+        if (kbfd < 0) {
+                fprintf(stderr, "Error: unable to get tty fd\n");
+                if (fin != stdin)
+                        fclose(fin);
+                if (fout != stdout) {
+                        fclose(fout);
+                        remove(argv[3]);
+                }
+                return -1;
+        }
+
         /* Disable terminal echo */
-        tcgetattr(STDIN_FILENO, &term);
+        tcgetattr(kbfd, &term);
         term_orig = term;
         term.c_lflag &= ~ECHO;
-        tcsetattr(STDIN_FILENO, TCSANOW, &term);
+        tcsetattr(kbfd, TCSANOW, &term);
 
         /* Get password */
         fprintf(stderr, "Enter password: ");
-        fgets((char *)pw, PW_SIZE, stdin);
+        fgets((char *)pw, PW_SIZE, kb);
         fprintf(stderr, "\n");
 
-        /* Restore terminal echo */
-        tcsetattr(STDIN_FILENO, TCSANOW, &term_orig);
+        /* Restore terminal echo and close input stream */
+        tcsetattr(kbfd, TCSANOW, &term_orig);
+        fclose(kb);
 
         /* Initialize the key */
         BF_set_key(&key, strlen((char *)pw), pw);
