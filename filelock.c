@@ -22,7 +22,6 @@ typedef union {
 } IVec;
 
 void clean(int mode, FILE *fp_in, FILE *fp_out, FILE *fp_tmpout) {
-        fprintf(stderr, "Called clean\n");
         fclose(fp_in);
         fclose(fp_out);
         /* Close and remove temporary file, if it in encrypt mode */
@@ -172,9 +171,12 @@ int main(int argc, char *argv[]) {
         /*****************************************************************************/
 
         /* If decrypt, just write to fp_out */
-        fp_tmpout = fp_out;
+        if (mode == BF_DECRYPT)
+                fp_tmpout = fp_out;
+
         /* Delayed write - skip first iteration */
         write_count = 0;
+
         while ((read_count = fread(buf_in, sizeof(uint8_t), BF_BLOCK_SIZE, fp_in)) > 0) {
                 /* Add necessary padding and record offset on last block */
                 if (mode == BF_ENCRYPT) {
@@ -188,7 +190,6 @@ int main(int argc, char *argv[]) {
                         clean(mode, fp_in, fp_out, fp_tmpout);
                         break;
                 }
-                fprintf(stderr, "%d\n", write_count);
 
                 /* Encrypt or decrypt block */
                 BF_ecb_encrypt(iv.iv8, keystream, &key, BF_ENCRYPT);
