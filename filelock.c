@@ -14,8 +14,6 @@
 #define IV_SIZE         8
 #define BF_BLOCK_SIZE   8
 
-#define TMP_PATH        "/tmp/filelock.tmp"
-
 typedef union {
         uint64_t iv64;
         uint8_t iv8[sizeof(uint64_t)];
@@ -83,7 +81,8 @@ int main(int argc, char *argv[]) {
 
         /* Open input stream from keyboard */
         kb = fopen("/dev/tty", "r");
-        if (kb == NULL) { 
+        kbfd = fileno(kb);
+        if (kb == NULL || kbfd < 0) { 
                 fprintf(stderr, "Error: unable to open tty\n");
                 if (fin != stdin)
                         fclose(fin);
@@ -91,17 +90,8 @@ int main(int argc, char *argv[]) {
                         fclose(fout);
                         remove(argv[3]);
                 }
-                return -1;
-        }
-        kbfd = fileno(kb);
-        if (kbfd < 0) {
-                fprintf(stderr, "Error: unable to get tty fd\n");
-                if (fin != stdin)
-                        fclose(fin);
-                if (fout != stdout) {
-                        fclose(fout);
-                        remove(argv[3]);
-                }
+                if (kb != NULL)
+                        fclose(kb);
                 return -1;
         }
 
