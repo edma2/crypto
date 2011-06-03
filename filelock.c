@@ -73,25 +73,28 @@ int main(int argc, char *argv[]) {
                 fout = fopen(argv[3], "w+");
                 if (fout == NULL) {
                         fprintf(stderr, "Error: unable to open %s for writing\n", argv[3]);
-                        if (fin != stdin)
-                                fclose(fin);
+                        fclose(fin);
                         return -1;
                 }
         }
 
         /* Open input stream from keyboard */
         kb = fopen("/dev/tty", "r");
-        kbfd = fileno(kb);
-        if (kb == NULL || kbfd < 0) { 
-                fprintf(stderr, "Error: unable to open tty\n");
-                if (fin != stdin)
+        if (kb != NULL) {
+                kbfd = fileno(kb);
+                if (kbfd < 0) {
+                        fprintf(stderr, "Error: unable to open tty\n");
                         fclose(fin);
-                if (fout != stdout) {
                         fclose(fout);
                         remove(argv[3]);
-                }
-                if (kb != NULL)
                         fclose(kb);
+                        return -1;
+                }
+        } else {
+                fprintf(stderr, "Error: unable to open tty\n");
+                fclose(fin);
+                fclose(fout);
+                remove(argv[3]);
                 return -1;
         }
 
@@ -119,12 +122,9 @@ int main(int argc, char *argv[]) {
                 c = 0;
                 if (fwrite(&c, sizeof(uint8_t), 1, fout) != 1) {
                         fprintf(stderr, "Error: unable to write initialization vector\n");
-                        if (fin != stdin)
-                                fclose(fin);
-                        if (fout != stdout) {
-                                fclose(fout);
-                                remove(argv[3]);
-                        }
+                        fclose(fin);
+                        fclose(fout);
+                        remove(argv[3]);
                         return -1;
                 }
 
@@ -138,36 +138,27 @@ int main(int argc, char *argv[]) {
                 /* Write initialization vector */
                 if (fwrite(iv.iv8, sizeof(uint8_t), IV_SIZE, fout) != IV_SIZE) {
                         fprintf(stderr, "Error: unable to write initialization vector\n");
-                        if (fin != stdin)
-                                fclose(fin);
-                        if (fout != stdout) {
-                                fclose(fout);
-                                remove(argv[3]);
-                        }
+                        fclose(fin);
+                        fclose(fout);
+                        remove(argv[3]);
                         return -1;
                 }
         } else if (mode == BF_DECRYPT) {
                 /* Recover offset information */
                 if (fread(&last_block_size, sizeof(uint8_t), 1, fin) < 0) {
                         fprintf(stderr, "Error: unable to read offset\n");
-                        if (fin != stdin)
-                                fclose(fin);
-                        if (fout != stdout) {
-                                fclose(fout);
-                                remove(argv[3]);
-                        }
+                        fclose(fin);
+                        fclose(fout);
+                        remove(argv[3]);
                         return -1;
                 }
 
                 /* Recover initialization vector */
                 if (fread(iv.iv8, sizeof(uint8_t), IV_SIZE, fin) < 0) {
                         fprintf(stderr, "Error: unable to read initialization vector\n");
-                        if (fin != stdin)
-                                fclose(fin);
-                        if (fout != stdout) {
-                                fclose(fout);
-                                remove(argv[3]);
-                        }
+                        fclose(fin);
+                        fclose(fout);
+                        remove(argv[3]);
                         return -1;
                 }
         }
@@ -184,14 +175,12 @@ int main(int argc, char *argv[]) {
                                 buf_in[read_count] = 0;
                 }
 
+                /* Write previous block */
                 if (fwrite(buf_out, sizeof(uint8_t), write_count, fout) != write_count) {
                         fprintf(stderr, "Error: write error\n");
-                        if (fin != stdin)
-                                fclose(fin);
-                        if (fout != stdout) {
-                                fclose(fout);
-                                remove(argv[3]);
-                        }
+                        fclose(fin);
+                        fclose(fout);
+                        remove(argv[3]);
                         break;
                 }
 
@@ -200,8 +189,6 @@ int main(int argc, char *argv[]) {
                 iv.iv64++;
                 for (i = 0; i < BF_BLOCK_SIZE; i++)
                         buf_out[i] = keystream[i] ^ buf_in[i];
-
-                /* Update write count for next iteration */
                 write_count = BF_BLOCK_SIZE;
         }
 
@@ -209,12 +196,9 @@ int main(int argc, char *argv[]) {
         write_count = ((mode == BF_ENCRYPT) ? BF_BLOCK_SIZE : last_block_size);
         if (fwrite(buf_out, sizeof(uint8_t), write_count, fout) != write_count) {
                 fprintf(stderr, "Error: write error\n");
-                if (fin != stdin)
-                        fclose(fin);
-                if (fout != stdout) {
-                        fclose(fout);
-                        remove(argv[3]);
-                }
+                fclose(fin);
+                fclose(fout);
+                remove(argv[3]);
                 return -1;
         }
 
@@ -223,21 +207,16 @@ int main(int argc, char *argv[]) {
                 rewind(fout);
                 if (fwrite(&last_block_size, sizeof(uint8_t), 1, fout) != 1) {
                         fprintf(stderr, "Error: unable to write initialization vector\n");
-                        if (fin != stdin)
-                                fclose(fin);
-                        if (fout != stdout) {
-                                fclose(fout);
-                                remove(argv[3]);
-                        }
+                        fclose(fin);
+                        fclose(fout);
+                        remove(argv[3]);
                         return -1;
                 }
         }
 
         /* Clean up */
-        if (fin != stdin)
-                fclose(fin);
-        if (fout != stdout)
-                fclose(fout);
+        fclose(fin);
+        fclose(fout);
 
         return 0;
 }
